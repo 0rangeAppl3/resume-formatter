@@ -1,0 +1,5 @@
+{
+  "name": "AI Resume Formatter",
+  "description": "Upload a CV in PDF or DOCX format, and this application will use AI to extract, rephrase, and format the content into a professional, US-style resume tailored to a specific page length.",
+  "requestFramePermissions": []
+}
