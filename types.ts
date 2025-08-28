@@ -24,10 +24,19 @@ export interface Education {
   graduationDate: string;
 }
 
+export interface PortfolioProject {
+  projectName: string;
+  description: string;
+  technologies: string[];
+  link?: string;
+}
+
 export interface ResumeData {
   contactInfo: ContactInfo;
   summary: string;
+  qualifications?: string[];
   workExperience: WorkExperience[];
   education: Education[];
   skills: string[];
+  portfolioProjects?: PortfolioProject[];
 }

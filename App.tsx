@@ -33,33 +33,12 @@ const App: React.FC = () => {
     setIsEditing(false);
 
     try {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onloadend = async () => {
-        const base64String = (reader.result as string).split(',')[1];
-        if (!base64String) {
-          setError('Could not read the file. Please try again.');
-          setIsLoading(false);
-          return;
-        }
-
-        try {
-          const generatedData = await generateResumeFromCV(base64String, file.type, pageCount);
-          setResumeData(generatedData);
-        } catch (err) {
-          console.error(err);
-          setError(err instanceof Error ? err.message : 'An unknown error occurred during AI generation.');
-        } finally {
-          setIsLoading(false);
-        }
-      };
-      reader.onerror = () => {
-        setError('Error reading file.');
-        setIsLoading(false);
-      };
+      const generatedData = await generateResumeFromCV(file, pageCount);
+      setResumeData(generatedData);
     } catch (err) {
       console.error(err);
-      setError(err instanceof Error ? err.message : 'An unknown error occurred.');
+      setError(err instanceof Error ? err.message : 'An unknown error occurred during AI generation.');
+    } finally {
       setIsLoading(false);
     }
   }, [file, pageCount]);
