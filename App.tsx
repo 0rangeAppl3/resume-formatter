@@ -9,6 +9,7 @@ import type { ResumeData } from './types';
 const App: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
   const [pageCount, setPageCount] = useState<number>(1);
+  const [formattingMode, setFormattingMode] = useState<'rewrite' | 'reformat'>('rewrite');
   const [resumeData, setResumeData] = useState<ResumeData | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,7 +34,7 @@ const App: React.FC = () => {
     setIsEditing(false);
 
     try {
-      const generatedData = await generateResumeFromCV(file, pageCount);
+      const generatedData = await generateResumeFromCV(file, pageCount, formattingMode);
       setResumeData(generatedData);
     } catch (err) {
       console.error(err);
@@ -41,7 +42,7 @@ const App: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [file, pageCount]);
+  }, [file, pageCount, formattingMode]);
 
   return (
     <div className="min-h-screen bg-slate-100 font-sans text-slate-800">
@@ -71,6 +72,43 @@ const App: React.FC = () => {
                     <option value={2}>2 Pages</option>
                     <option value={3}>3 Pages</option>
                   </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-600 mb-2">3. Formatting Mode</label>
+                  <div className="flex space-x-4 bg-slate-50 border border-slate-300 rounded-md p-2">
+                    <label className="flex-1 text-center cursor-pointer">
+                      <input
+                        type="radio"
+                        name="formatting-mode"
+                        value="rewrite"
+                        checked={formattingMode === 'rewrite'}
+                        onChange={(e) => setFormattingMode(e.target.value as 'rewrite' | 'reformat')}
+                        className="sr-only"
+                      />
+                      <span className={`block py-1.5 px-3 rounded-md text-sm font-semibold transition-colors ${formattingMode === 'rewrite' ? 'bg-indigo-600 text-white shadow' : 'bg-white text-slate-600 hover:bg-slate-100'}`}>
+                        Rewrite
+                      </span>
+                    </label>
+                    <label className="flex-1 text-center cursor-pointer">
+                      <input
+                        type="radio"
+                        name="formatting-mode"
+                        value="reformat"
+                        checked={formattingMode === 'reformat'}
+                        onChange={(e) => setFormattingMode(e.target.value as 'rewrite' | 'reformat')}
+                        className="sr-only"
+                      />
+                       <span className={`block py-1.5 px-3 rounded-md text-sm font-semibold transition-colors ${formattingMode === 'reformat' ? 'bg-indigo-600 text-white shadow' : 'bg-white text-slate-600 hover:bg-slate-100'}`}>
+                        Reformat
+                      </span>
+                    </label>
+                  </div>
+                   <p className="text-xs text-slate-500 mt-2">
+                      {formattingMode === 'rewrite'
+                        ? 'AI will summarize and improve your content for impact.'
+                        : 'AI will only structure your original, unchanged content.'}
+                    </p>
                 </div>
                 
                 <button

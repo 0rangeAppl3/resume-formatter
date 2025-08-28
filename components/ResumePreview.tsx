@@ -55,50 +55,55 @@ export const ResumePreview: React.FC<ResumePreviewProps> = ({ data, isEditing, o
     });
   };
   
-  const handleInputChange = (section: keyof ResumeData, field: string, value: string | string[], index?: number) => {
+  // Refactored handler for items in an array of objects (Work Experience, Education, etc.)
+  const handleItemChange = (section: 'workExperience' | 'education' | 'portfolioProjects', index: number, field: string, value: any) => {
     setEditableData(prev => {
-        const newData = JSON.parse(JSON.stringify(prev));
-        if (index !== undefined) {
-          (newData[section] as any)[index][field] = value;
-        } else if (section === 'skills') {
-            if (typeof value === 'string') {
-              newData.skills = value.split(',').map(s => s.trim()).filter(Boolean);
-            }
-        } else if(section === 'qualifications'){
-            if(Array.isArray(value)){
-              newData.qualifications = value.filter(Boolean);
-            }
-        }
-        else {
-            (newData[section] as any)[field] = value;
-        }
-        return newData;
+      const newArray = (prev[section] as any[]).map((item, i) => 
+        i === index ? { ...item, [field]: value } : item
+      );
+      return { ...prev, [section]: newArray };
     });
   };
 
+  // Refactored handler for simple object properties (Contact Info)
+  const handleContactInfoChange = (field: keyof ResumeData['contactInfo'], value: string) => {
+    setEditableData(prev => ({
+      ...prev,
+      contactInfo: {
+        ...prev.contactInfo,
+        [field]: value
+      }
+    }));
+  };
+
+  // Refactored handler for deleting an item from an array
   const handleDeleteItem = (section: 'workExperience' | 'education' | 'portfolioProjects', index: number) => {
     setEditableData(prev => {
-      const newData = JSON.parse(JSON.stringify(prev));
-      if (newData[section]) {
-        (newData[section] as any[]).splice(index, 1);
+      const oldArray = (prev[section] as any[] | undefined) || [];
+      return {
+        ...prev,
+        [section]: oldArray.filter((_, i) => i !== index),
+      };
+    });
+  };
+  
+  // Refactored handler for deleting an entire optional section
+  const handleDeleteSection = (section: 'qualifications' | 'portfolioProjects' | 'skills') => {
+    setEditableData(prev => {
+      const newData = { ...prev };
+      if (section === 'skills') {
+        newData.skills = []; // Cannot be undefined, so clear it
+      } else {
+        delete (newData as Partial<ResumeData>)[section];
       }
       return newData;
     });
   };
 
-  const handleDeleteSection = (section: keyof ResumeData) => {
-    setEditableData(prev => {
-      const newData = JSON.parse(JSON.stringify(prev));
-      delete newData[section];
-      return newData;
-    });
-  };
-
+  // Refactored handler for adding a new item to an array
   const handleAddItem = (section: 'workExperience' | 'education' | 'portfolioProjects') => {
     setEditableData(prev => {
-        const newData = JSON.parse(JSON.stringify(prev));
         let newItem: WorkExperience | Education | PortfolioProject;
-
         switch (section) {
             case 'workExperience':
                 newItem = { jobTitle: 'New Job Title', company: 'Company Name', location: 'City, State', startDate: 'Month Year', endDate: 'Present', description: ['Responsibility or achievement'] };
@@ -110,12 +115,11 @@ export const ResumePreview: React.FC<ResumePreviewProps> = ({ data, isEditing, o
                 newItem = { projectName: 'New Project', description: 'Project description.', technologies: ['Tech 1', 'Tech 2'], link: '' };
                 break;
         }
-
-        if (!newData[section]) {
-            (newData as any)[section] = [];
+        const oldArray = (prev[section] as any[] | undefined) || [];
+        return {
+            ...prev,
+            [section]: [...oldArray, newItem]
         }
-        (newData[section] as any[]).push(newItem);
-        return newData;
     });
   };
 
@@ -177,17 +181,17 @@ export const ResumePreview: React.FC<ResumePreviewProps> = ({ data, isEditing, o
       {/* Contact Info */}
       <div className="text-center border-b pb-4">
         {isEditing ? (
-             <input type="text" value={editableData.contactInfo.name} onChange={e => handleInputChange('contactInfo', 'name', e.target.value)} className={`${commonInputClass} text-3xl font-bold text-center mb-1`} />
+             <input type="text" value={editableData.contactInfo.name} onChange={e => handleContactInfoChange('name', e.target.value)} className={`${commonInputClass} text-3xl font-bold text-center mb-1`} />
         ) : (
             <h2 className="text-3xl font-bold tracking-tight text-slate-800">{data.contactInfo.name}</h2>
         )}
         {isEditing ? (
             <div className="grid grid-cols-2 gap-2 mt-2">
-                <input type="text" value={editableData.contactInfo.location} onChange={e => handleInputChange('contactInfo', 'location', e.target.value)} className={commonInputClass} placeholder="Location" />
-                <input type="text" value={editableData.contactInfo.phone} onChange={e => handleInputChange('contactInfo', 'phone', e.target.value)} className={commonInputClass} placeholder="Phone" />
-                <input type="email" value={editableData.contactInfo.email} onChange={e => handleInputChange('contactInfo', 'email', e.target.value)} className={commonInputClass} placeholder="Email" />
-                <input type="text" value={editableData.contactInfo.linkedin || ''} onChange={e => handleInputChange('contactInfo', 'linkedin', e.target.value)} className={commonInputClass} placeholder="LinkedIn URL" />
-                <input type="text" value={editableData.contactInfo.portfolio || ''} onChange={e => handleInputChange('contactInfo', 'portfolio', e.target.value)} className={`${commonInputClass} col-span-2`} placeholder="Portfolio URL" />
+                <input type="text" value={editableData.contactInfo.location} onChange={e => handleContactInfoChange('location', e.target.value)} className={commonInputClass} placeholder="Location" />
+                <input type="text" value={editableData.contactInfo.phone} onChange={e => handleContactInfoChange('phone', e.target.value)} className={commonInputClass} placeholder="Phone" />
+                <input type="email" value={editableData.contactInfo.email} onChange={e => handleContactInfoChange('email', e.target.value)} className={commonInputClass} placeholder="Email" />
+                <input type="text" value={editableData.contactInfo.linkedin || ''} onChange={e => handleContactInfoChange('linkedin', e.target.value)} className={commonInputClass} placeholder="LinkedIn URL" />
+                <input type="text" value={editableData.contactInfo.portfolio || ''} onChange={e => handleContactInfoChange('portfolio', e.target.value)} className={`${commonInputClass} col-span-2`} placeholder="Portfolio URL" />
             </div>
         ) : (
             <p className="text-slate-500 mt-1">
@@ -202,7 +206,7 @@ export const ResumePreview: React.FC<ResumePreviewProps> = ({ data, isEditing, o
       <div className="section">
         <h3 className="section-title">Summary</h3>
         {isEditing ? (
-            <textarea value={editableData.summary} onChange={e => handleInputChange('summary', '', e.target.value)} className={commonTextareaClass} />
+            <textarea value={editableData.summary} onChange={e => setEditableData(d => ({ ...d, summary: e.target.value}))} className={commonTextareaClass} />
         ) : (
             <p className="text-slate-600">{data.summary}</p>
         )}
@@ -219,7 +223,7 @@ export const ResumePreview: React.FC<ResumePreviewProps> = ({ data, isEditing, o
                 </button>
                 <textarea 
                     value={editableData.qualifications?.join('\n') || ''} 
-                    onChange={e => handleInputChange('qualifications', '', e.target.value.split('\n'))} 
+                    onChange={e => setEditableData(d => ({...d, qualifications: e.target.value.split('\n')}))} 
                     className={commonTextareaClass}
                     placeholder="Enter qualifications, one per line."
                 />
@@ -238,41 +242,47 @@ export const ResumePreview: React.FC<ResumePreviewProps> = ({ data, isEditing, o
       <div className="section">
         <h3 className="section-title">Work Experience</h3>
         <div className="space-y-4">
-          {(isEditing ? editableData.workExperience : data.workExperience).map((job, index) => (
-            <div key={index} className="relative p-2 border-transparent hover:border-red-100 border rounded">
-              {isEditing && (
+          {(isEditing ? editableData.workExperience : data.workExperience).map((job, index) => {
+            if (!job || typeof job !== 'object' || !job.jobTitle) {
+              return null;
+            }
+            
+            return (
+              <div key={index} className="relative p-2 border-transparent hover:border-red-100 border rounded">
+                {isEditing ? (
+                    <>
+                    <button onClick={() => handleDeleteItem('workExperience', index)} className={deleteButtonClass} title="Delete Experience">
+                        <TrashIcon className="w-5 h-5" />
+                    </button>
+                    <div className="space-y-1">
+                        <input type="text" value={job.jobTitle} onChange={e => handleItemChange('workExperience', index, 'jobTitle', e.target.value)} className={`${commonInputClass} font-bold`} />
+                        <input type="text" value={job.company} onChange={e => handleItemChange('workExperience', index, 'company', e.target.value)} className={commonInputClass} />
+                        <div className="flex gap-2">
+                          <input type="text" value={job.location} onChange={e => handleItemChange('workExperience', index, 'location', e.target.value)} className={commonInputClass} />
+                          <input type="text" value={job.startDate} onChange={e => handleItemChange('workExperience', index, 'startDate', e.target.value)} className={commonInputClass} />
+                          <input type="text" value={job.endDate} onChange={e => handleItemChange('workExperience', index, 'endDate', e.target.value)} className={commonInputClass} />
+                        </div>
+                        <textarea value={(job.description || []).join('\n')} onChange={e => handleItemChange('workExperience', index, 'description', e.target.value.split('\n'))} className={`${commonTextareaClass} mt-2`} />
+                    </div>
+                    </>
+                ) : (
                   <>
-                  <button onClick={() => handleDeleteItem('workExperience', index)} className={deleteButtonClass} title="Delete Experience">
-                      <TrashIcon className="w-5 h-5" />
-                  </button>
-                  <div className="space-y-1">
-                      <input type="text" value={job.jobTitle} onChange={e => handleInputChange('workExperience', 'jobTitle', e.target.value, index)} className={`${commonInputClass} font-bold`} />
-                      <input type="text" value={job.company} onChange={e => handleInputChange('workExperience', 'company', e.target.value, index)} className={commonInputClass} />
-                      <div className="flex gap-2">
-                        <input type="text" value={job.location} onChange={e => handleInputChange('workExperience', 'location', e.target.value, index)} className={commonInputClass} />
-                        <input type="text" value={job.startDate} onChange={e => handleInputChange('workExperience', 'startDate', e.target.value, index)} className={commonInputClass} />
-                        <input type="text" value={job.endDate} onChange={e => handleInputChange('workExperience', 'endDate', e.target.value, index)} className={commonInputClass} />
+                      <div className="flex justify-between items-baseline">
+                          <h4 className="font-bold text-slate-800">{job.jobTitle}</h4>
+                          <p className="text-slate-500 font-medium">{job.startDate} &ndash; {job.endDate}</p>
                       </div>
-                      <textarea value={job.description.join('\n')} onChange={e => handleInputChange('workExperience', 'description', e.target.value.split('\n'), index)} className={`${commonTextareaClass} mt-2`} />
-                  </div>
+                      <div className="flex justify-between items-baseline">
+                          <p className="font-semibold text-slate-600">{job.company}</p>
+                          <p className="text-slate-500">{job.location}</p>
+                      </div>
+                      <ul className="list-disc list-outside ml-5 mt-2 space-y-1 text-slate-600">
+                          {(job.description || []).filter(desc => desc && desc.trim().length > 0).map((desc, i) => (<li key={i}>{desc}</li>))}
+                      </ul>
                   </>
-              ) : (
-                <>
-                    <div className="flex justify-between items-baseline">
-                        <h4 className="font-bold text-slate-800">{job.jobTitle}</h4>
-                        <p className="text-slate-500 font-medium">{job.startDate} &ndash; {job.endDate}</p>
-                    </div>
-                    <div className="flex justify-between items-baseline">
-                        <p className="font-semibold text-slate-600">{job.company}</p>
-                        <p className="text-slate-500">{job.location}</p>
-                    </div>
-                    <ul className="list-disc list-outside ml-5 mt-2 space-y-1 text-slate-600">
-                        {job.description.map((desc, i) => (<li key={i}>{desc}</li>))}
-                    </ul>
-                </>
-              )}
-            </div>
-          ))}
+                )}
+              </div>
+            )
+          })}
         </div>
         {isEditing && (
             <div className="mt-4 text-center">
@@ -296,11 +306,11 @@ export const ResumePreview: React.FC<ResumePreviewProps> = ({ data, isEditing, o
                             <TrashIcon className="w-5 h-5" />
                         </button>
                         <div className="space-y-1 mb-2">
-                            <input type="text" value={edu.degree} onChange={e => handleInputChange('education', 'degree', e.target.value, index)} className={`${commonInputClass} font-bold`} />
+                            <input type="text" value={edu.degree} onChange={e => handleItemChange('education', index, 'degree', e.target.value)} className={`${commonInputClass} font-bold`} />
                             <div className="flex gap-2">
-                                <input type="text" value={edu.institution} onChange={e => handleInputChange('education', 'institution', e.target.value, index)} className={commonInputClass} />
-                                <input type="text" value={edu.location} onChange={e => handleInputChange('education', 'location', e.target.value, index)} className={commonInputClass} />
-                                <input type="text" value={edu.graduationDate} onChange={e => handleInputChange('education', 'graduationDate', e.target.value, index)} className={commonInputClass} />
+                                <input type="text" value={edu.institution} onChange={e => handleItemChange('education', index, 'institution', e.target.value)} className={commonInputClass} />
+                                <input type="text" value={edu.location} onChange={e => handleItemChange('education', index, 'location', e.target.value)} className={commonInputClass} />
+                                <input type="text" value={edu.graduationDate} onChange={e => handleItemChange('education', index, 'graduationDate', e.target.value)} className={commonInputClass} />
                             </div>
                         </div>
                         </>
@@ -339,10 +349,10 @@ export const ResumePreview: React.FC<ResumePreviewProps> = ({ data, isEditing, o
                                 <TrashIcon className="w-5 h-5" />
                             </button>
                             <div className="space-y-1">
-                                <input type="text" value={project.projectName} onChange={e => handleInputChange('portfolioProjects', 'projectName', e.target.value, index)} className={`${commonInputClass} font-bold`} />
-                                <input type="text" value={project.link || ''} onChange={e => handleInputChange('portfolioProjects', 'link', e.target.value, index)} className={commonInputClass} placeholder="Project Link (optional)" />
-                                <textarea value={project.description} onChange={e => handleInputChange('portfolioProjects', 'description', e.target.value, index)} className={commonTextareaClass} placeholder="Project description..." />
-                                <input type="text" value={project.technologies.join(', ')} onChange={e => handleInputChange('portfolioProjects', 'technologies', e.target.value.split(',').map(s=>s.trim()), index)} className={commonInputClass} placeholder="Technologies (comma-separated)" />
+                                <input type="text" value={project.projectName} onChange={e => handleItemChange('portfolioProjects', index, 'projectName', e.target.value)} className={`${commonInputClass} font-bold`} />
+                                <input type="text" value={project.link || ''} onChange={e => handleItemChange('portfolioProjects', index, 'link', e.target.value)} className={commonInputClass} placeholder="Project Link (optional)" />
+                                <textarea value={project.description} onChange={e => handleItemChange('portfolioProjects', index, 'description', e.target.value)} className={commonTextareaClass} placeholder="Project description..." />
+                                <input type="text" value={project.technologies.join(', ')} onChange={e => handleItemChange('portfolioProjects', index, 'technologies', e.target.value.split(',').map(s=>s.trim()))} className={commonInputClass} placeholder="Technologies (comma-separated)" />
                             </div>
                             </>
                         ) : (
@@ -380,7 +390,7 @@ export const ResumePreview: React.FC<ResumePreviewProps> = ({ data, isEditing, o
             <button onClick={() => handleDeleteSection('skills')} className={deleteButtonClass} title="Delete Skills Section">
                 <TrashIcon className="w-5 h-5" />
             </button>
-            <input type="text" value={editableData.skills.join(', ')} onChange={e => handleInputChange('skills', '', e.target.value)} className={commonInputClass} />
+            <input type="text" value={editableData.skills.join(', ')} onChange={e => setEditableData(d => ({ ...d, skills: e.target.value.split(',').map(s => s.trim())}))} className={commonInputClass} />
             </>
         ) : (
             <p className="text-slate-600">{data.skills.join(' • ')}</p>
@@ -396,7 +406,7 @@ export const ResumePreview: React.FC<ResumePreviewProps> = ({ data, isEditing, o
           font-weight: 700;
           color: #1e293b; /* slate-800 */
           border-bottom: 2px solid #e2e8f0; /* slate-200 */
-          padding-bottom: 0.25rem;
+          padding-bottom: 0.75rem; /* Increased padding to fix PDF rendering overlap */
           margin-bottom: 0.75rem;
         }
         @keyframes fadeIn {

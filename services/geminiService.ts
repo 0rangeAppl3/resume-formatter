@@ -118,13 +118,18 @@ const readFileAsArrayBuffer = (file: File): Promise<ArrayBuffer> => {
     });
 };
 
-/**
- * Extracts and cleans a JSON object from a string that may contain markdown or other text.
- * @param text The string to parse.
- * @returns A cleaned ResumeData object.
- */
+const cleanString = (str: string): string => {
+    if (typeof str !== 'string') return str;
+    return str
+        .replace(/^[\s:(){}[\]`'".,;*<>\\\/]+|[\s:(){}[\]`'".,;*<>\\\/]+$/g, '')
+        .replace(/\\n/g, ' ')
+        .replace(/\\"/g, '"')
+        .replace(/\\\//g, '/')
+        .replace(/\s+/g, ' ')
+        .trim();
+};
+
 const parseAndCleanResumeData = (text: string): ResumeData => {
-    // 1. Find the JSON blob.
     const jsonMatch = text.match(/```(?:json)?\s*({[\s\S]*?})\s*```|({[\s\S]*})/);
     if (!jsonMatch) {
         console.error("Could not find valid JSON in the response:", text);
@@ -132,7 +137,6 @@ const parseAndCleanResumeData = (text: string): ResumeData => {
     }
     const jsonText = jsonMatch[1] || jsonMatch[2];
 
-    // 2. Parse the JSON
     let data: any;
     try {
         data = JSON.parse(jsonText);
@@ -142,19 +146,15 @@ const parseAndCleanResumeData = (text: string): ResumeData => {
         throw new Error("Failed to parse AI response. The JSON is malformed.");
     }
 
-    // 3. Recursively clean all values in the parsed object with robust validation.
     const cleanValue = (value: any, key?: string): any => {
         if (typeof value === 'string') {
-            return value.replace(/^[\s:(){}[\]`'".,;*]*|[\s:(){}[\]`'".,;*]*$/g, '');
+            return cleanString(value);
         }
 
         if (Array.isArray(value)) {
-             // **Targeted Fix**: Apply strict validation for the workExperience array.
             if (key === 'workExperience') {
                 const cleanedWorkExperience: WorkExperience[] = [];
                 for (const item of value) {
-                    // Only keep items that are actual objects with the necessary properties.
-                    // This definitively filters out stray strings or malformed objects.
                     if (
                         item &&
                         typeof item === 'object' &&
@@ -163,13 +163,11 @@ const parseAndCleanResumeData = (text: string): ResumeData => {
                         'description' in item &&
                         Array.isArray(item.description)
                     ) {
-                        // If it's a valid-looking object, then recursively clean it.
                         cleanedWorkExperience.push(cleanValue(item) as WorkExperience);
                     }
                 }
                 return cleanedWorkExperience;
             }
-            // Generic cleaning for all other arrays
             return value.map(item => cleanValue(item)).filter(item => {
                 if (typeof item === 'string') return item.length > 0;
                 return item !== null && item !== undefined;
@@ -180,7 +178,14 @@ const parseAndCleanResumeData = (text: string): ResumeData => {
             const cleanedObject: { [key: string]: any } = {};
             for (const k in value) {
                 if (Object.prototype.hasOwnProperty.call(value, k)) {
-                    cleanedObject[k] = cleanValue(value[k], k);
+                    const cleanedValue = cleanValue(value[k], k);
+                    if (
+                        cleanedValue !== null && 
+                        cleanedValue !== undefined && 
+                        (typeof cleanedValue !== 'string' || cleanedValue.length > 0)
+                    ) {
+                        cleanedObject[k] = cleanedValue;
+                    }
                 }
             }
             return cleanedObject;
@@ -189,13 +194,38 @@ const parseAndCleanResumeData = (text: string): ResumeData => {
         return value;
     };
     
-    return cleanValue(data) as ResumeData;
+    const cleanedData = cleanValue(data) as ResumeData;
+    
+    if (!cleanedData.contactInfo || !cleanedData.workExperience || !cleanedData.education) {
+        throw new Error("Resume data is missing required fields after cleaning.");
+    }
+    
+    return cleanedData;
 };
 
+const getPrompt = (mode: 'rewrite' | 'reformat', pageCount: number, docxText?: string): string => {
+    const rewriteIntro = `You are an expert resume writer.`;
+    const reformatIntro = `You are an expert data extractor.`;
+    
+    const rewriteAction = `Then, rewrite and format this information into a concise, professional, US-style resume. The final resume must not exceed ${pageCount} page(s) in length when printed. Paraphrase and summarize content as needed to meet this length requirement, focusing on impact and achievements.`;
+    const reformatAction = `Your task is to extract the content and structure it into the provided JSON schema. **DO NOT rewrite, paraphrase, or summarize the content.** You must copy the text from the CV verbatim and place it into the appropriate fields. The goal is to reformat the existing content, not to create new content.`;
+
+    const source = docxText
+        ? `The following text was extracted from a CV document:\n\n---\n${docxText}\n---\n\nAnalyze the text above.`
+        : `Analyze the provided CV document.`;
+        
+    const commonInstructions = `Extract all relevant information, including contact details, professional summary, work experience, education, and skills. If the source contains sections for 'Qualifications'/'Core Competencies' or 'Portfolio Projects', include them in the output; otherwise, omit these fields.\n\nIMPORTANT: Return ONLY valid JSON matching the provided schema. Each work experience description should be an array of strings, with each string being a single bullet point. Do not include any JSON formatting characters or escape sequences in the actual content strings.`;
+
+    const intro = mode === 'rewrite' ? rewriteIntro : reformatIntro;
+    const action = mode === 'rewrite' ? rewriteAction : reformatAction;
+
+    return `${intro} ${source} ${action} ${commonInstructions}`;
+};
 
 export const generateResumeFromCV = async (
     file: File,
-    pageCount: number
+    pageCount: number,
+    mode: 'rewrite' | 'reformat'
 ): Promise<ResumeData> => {
     
     const mimeType = file.type;
@@ -207,7 +237,7 @@ export const generateResumeFromCV = async (
 
     if (mimeType.startsWith('application/pdf')) {
         const cvBase64 = await readFileAsBase64(file);
-        const prompt = `You are an expert resume writer. Analyze the provided CV document. Extract all relevant information, including contact details, professional summary, work experience, education, and skills. Then, rewrite and format this information into a concise, professional, US-style resume. The final resume must not exceed ${pageCount} page(s) in length when printed. Paraphrase and summarize content as needed to meet this length requirement, focusing on impact and achievements. If the CV contains sections for 'Qualifications'/'Core Competencies' or 'Portfolio Projects', include them in the output; otherwise, omit these fields. Return the output as a JSON object matching the provided schema.`;
+        const prompt = getPrompt(mode, pageCount);
         
         modelContents = [
             {
@@ -230,7 +260,7 @@ export const generateResumeFromCV = async (
             throw new Error("Could not extract text from the DOCX file.");
         }
 
-        const prompt = `You are an expert resume writer. The following text was extracted from a CV document:\n\n---\n${docxText}\n---\n\nAnalyze the text above. Extract all relevant information, including contact details, professional summary, work experience, education, and skills. Then, rewrite and format this information into a concise, professional, US-style resume. The final resume must not exceed ${pageCount} page(s) in length when printed. Paraphrase and summarize content as needed to meet this length requirement, focusing on impact and achievements. If the text contains sections for 'Qualifications'/'Core Competencies' or 'Portfolio Projects', include them in the output; otherwise, omit these fields. Return the output as a JSON object matching the provided schema.`;
+        const prompt = getPrompt(mode, pageCount, docxText);
         
         modelContents = [{ parts: [{ text: prompt }] }];
     }
